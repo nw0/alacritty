@@ -6,6 +6,7 @@ use log::trace;
 use serde::de::{Error as _, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_yaml::Value;
+pub use vte::ansi::Rgb as VteRgb;
 
 use crate::ansi;
 use crate::config::Colors;
@@ -75,6 +76,18 @@ impl Mul<f32> for Rgb {
         trace!("Scaling RGB by {} from {:?} to {:?}", rhs, self, result);
 
         result
+    }
+}
+
+impl From<VteRgb> for Rgb {
+    fn from(rgb: VteRgb) -> Self {
+        Rgb { r: rgb.r, g: rgb.g, b: rgb.b }
+    }
+}
+
+impl Into<VteRgb> for Rgb {
+    fn into(self) -> VteRgb {
+        VteRgb { r: self.r, g: self.g, b: self.b }
     }
 }
 

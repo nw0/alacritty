@@ -20,7 +20,7 @@ use crate::grid::{Dimensions, DisplayIter, Grid, IndexRegion, Indexed, Scroll};
 use crate::index::{self, Boundary, Column, Direction, IndexRange, Line, Point, Side};
 use crate::selection::{Selection, SelectionRange};
 use crate::term::cell::{Cell, Flags, LineLength};
-use crate::term::color::{CellRgb, Rgb, DIM_FACTOR};
+use crate::term::color::{CellRgb, Rgb, VteRgb, DIM_FACTOR};
 use crate::term::search::{RegexIter, RegexSearch};
 use crate::vi_mode::{ViModeCursor, ViMotion};
 
@@ -318,8 +318,8 @@ impl RenderableCell {
     fn compute_fg_rgb<C>(config: &Config<C>, colors: &color::List, fg: Color, flags: Flags) -> Rgb {
         match fg {
             Color::Spec(rgb) => match flags & Flags::DIM {
-                Flags::DIM => rgb * DIM_FACTOR,
-                _ => rgb,
+                Flags::DIM => Rgb::from(rgb) * DIM_FACTOR,
+                _ => Rgb::from(rgb),
             },
             Color::Named(ansi) => {
                 match (config.draw_bold_text_with_bright_colors(), flags & Flags::DIM_BOLD) {
@@ -372,7 +372,7 @@ impl RenderableCell {
     #[inline]
     fn compute_bg_rgb(colors: &color::List, bg: Color) -> Rgb {
         match bg {
-            Color::Spec(rgb) => rgb,
+            Color::Spec(rgb) => Rgb::from(rgb),
             Color::Named(ansi) => colors[ansi],
             Color::Indexed(idx) => colors[idx],
         }
@@ -1432,7 +1432,9 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn goto(&mut self, line: Line, col: Column) {
+    fn goto(&mut self, line: usize, col: usize) {
+        let line = Line(line);
+        let col = Column(col);
         trace!("Going to: line={}, col={}", line, col);
         let (y_offset, max_y) = if self.mode.contains(TermMode::ORIGIN) {
             (self.scroll_region.start, self.scroll_region.end - 1)
@@ -1446,19 +1448,22 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn goto_line(&mut self, line: Line) {
+    fn goto_line(&mut self, line: usize) {
+        let line = Line(line);
         trace!("Going to line: {}", line);
-        self.goto(line, self.grid.cursor.point.col)
+        self.goto(line.0, self.grid.cursor.point.col.0)
     }
 
     #[inline]
-    fn goto_col(&mut self, col: Column) {
+    fn goto_col(&mut self, col: usize) {
+        let col = Column(col);
         trace!("Going to column: {}", col);
-        self.goto(self.grid.cursor.point.line, col)
+        self.goto(self.grid.cursor.point.line.0, col.0)
     }
 
     #[inline]
-    fn insert_blank(&mut self, count: Column) {
+    fn insert_blank(&mut self, count: usize) {
+        let count = Column(count);
         let cursor = self.grid.cursor;
 
         // Ensure inserting within terminal bounds
@@ -1485,21 +1490,24 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn move_up(&mut self, lines: Line) {
+    fn move_up(&mut self, lines: usize) {
+        let lines = Line(lines);
         trace!("Moving up: {}", lines);
         let move_to = Line(self.grid.cursor.point.line.0.saturating_sub(lines.0));
-        self.goto(move_to, self.grid.cursor.point.col)
+        self.goto(move_to.0, self.grid.cursor.point.col.0)
     }
 
     #[inline]
-    fn move_down(&mut self, lines: Line) {
+    fn move_down(&mut self, lines: usize) {
+        let lines = Line(lines);
         trace!("Moving down: {}", lines);
         let move_to = self.grid.cursor.point.line + lines;
-        self.goto(move_to, self.grid.cursor.point.col)
+        self.goto(move_to.0, self.grid.cursor.point.col.0)
     }
 
     #[inline]
-    fn move_forward(&mut self, cols: Column) {
+    fn move_forward(&mut self, cols: usize) {
+        let cols = Column(cols);
         trace!("Moving forward: {}", cols);
         let num_cols = self.cols();
         self.grid.cursor.point.col = min(self.grid.cursor.point.col + cols, num_cols - 1);
@@ -1507,7 +1515,8 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn move_backward(&mut self, cols: Column) {
+    fn move_backward(&mut self, cols: usize) {
+        let cols = Column(cols);
         trace!("Moving backward: {}", cols);
         self.grid.cursor.point.col = Column(self.grid.cursor.point.col.saturating_sub(cols.0));
         self.grid.cursor.input_needs_wrap = false;
@@ -1546,17 +1555,19 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn move_down_and_cr(&mut self, lines: Line) {
+    fn move_down_and_cr(&mut self, lines: usize) {
+        let lines = Line(lines);
         trace!("Moving down and cr: {}", lines);
         let move_to = self.grid.cursor.point.line + lines;
-        self.goto(move_to, Column(0))
+        self.goto(move_to.0, Column(0).0)
     }
 
     #[inline]
-    fn move_up_and_cr(&mut self, lines: Line) {
+    fn move_up_and_cr(&mut self, lines: usize) {
+        let lines = Line(lines);
         trace!("Moving up and cr: {}", lines);
         let move_to = Line(self.grid.cursor.point.line.0.saturating_sub(lines.0));
-        self.goto(move_to, Column(0))
+        self.goto(move_to.0, Column(0).0)
     }
 
     /// Insert tab at cursor position.
@@ -1616,7 +1627,7 @@ impl<T: EventListener> Handler for Term<T> {
         trace!("Linefeed");
         let next = self.grid.cursor.point.line + 1;
         if next == self.scroll_region.end {
-            self.scroll_up(Line(1));
+            self.scroll_up(Line(1).0);
         } else if next < self.screen_lines() {
             self.grid.cursor.point.line += 1;
         }
@@ -1673,19 +1684,22 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn scroll_up(&mut self, lines: Line) {
+    fn scroll_up(&mut self, lines: usize) {
+        let lines = Line(lines);
         let origin = self.scroll_region.start;
         self.scroll_up_relative(origin, lines);
     }
 
     #[inline]
-    fn scroll_down(&mut self, lines: Line) {
+    fn scroll_down(&mut self, lines: usize) {
+        let lines = Line(lines);
         let origin = self.scroll_region.start;
         self.scroll_down_relative(origin, lines);
     }
 
     #[inline]
-    fn insert_blank_lines(&mut self, lines: Line) {
+    fn insert_blank_lines(&mut self, lines: usize) {
+        let lines = Line(lines);
         trace!("Inserting blank {} lines", lines);
 
         let origin = self.grid.cursor.point.line;
@@ -1695,7 +1709,8 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn delete_lines(&mut self, lines: Line) {
+    fn delete_lines(&mut self, lines: usize) {
+        let lines = Line(lines);
         let origin = self.grid.cursor.point.line;
         let lines = min(self.screen_lines() - origin, lines);
 
@@ -1707,7 +1722,8 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn erase_chars(&mut self, count: Column) {
+    fn erase_chars(&mut self, count: usize) {
+        let count = Column(count);
         let cursor = self.grid.cursor;
 
         trace!("Erasing chars: count={}, col={}", count, cursor.point.col);
@@ -1723,7 +1739,8 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn delete_chars(&mut self, count: Column) {
+    fn delete_chars(&mut self, count: usize) {
+        let count = Column(count);
         let cols = self.cols();
         let cursor = self.grid.cursor;
 
@@ -1821,7 +1838,8 @@ impl<T: EventListener> Handler for Term<T> {
 
     /// Set the indexed color value.
     #[inline]
-    fn set_color(&mut self, index: usize, color: Rgb) {
+    fn set_color(&mut self, index: usize, color: VteRgb) {
+        let color = Rgb::from(color);
         trace!("Setting color[{}] = {:?}", index, color);
         self.colors[index] = color;
         self.color_modified[index] = true;
@@ -1990,7 +2008,7 @@ impl<T: EventListener> Handler for Term<T> {
         trace!("Reversing index");
         // If cursor is at the top.
         if self.grid.cursor.point.line == self.scroll_region.start {
-            self.scroll_down(Line(1));
+            self.scroll_down(Line(1).0);
         } else {
             self.grid.cursor.point.line = Line(self.grid.cursor.point.line.saturating_sub(1));
         }
@@ -2139,7 +2157,7 @@ impl<T: EventListener> Handler for Term<T> {
 
         self.scroll_region.start = min(start, self.screen_lines());
         self.scroll_region.end = min(end, self.screen_lines());
-        self.goto(Line(0), Column(0));
+        self.goto(Line(0).0, Column(0).0);
     }
 
     #[inline]
