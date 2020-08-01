@@ -2190,8 +2190,9 @@ impl<T: EventListener, W: io::Write> Handler<W> for Term<T, W> {
     }
 
     #[inline]
-    fn set_title(&mut self, title: Option<String>) {
+    fn set_title(&mut self, title: Option<&str>) {
         trace!("Setting title to '{:?}'", title);
+        let title = title.map(str::trim).map(String::from);
 
         self.title = title.clone();
 
@@ -2224,7 +2225,7 @@ impl<T: EventListener, W: io::Write> Handler<W> for Term<T, W> {
 
         if let Some(popped) = self.title_stack.pop() {
             trace!("Title '{:?}' popped from stack", popped);
-            self.set_title(popped);
+            self.set_title(popped.as_deref());
         }
     }
 }
