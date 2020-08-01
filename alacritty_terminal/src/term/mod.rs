@@ -1352,7 +1352,7 @@ impl<T> Dimensions for Term<T> {
     }
 }
 
-impl<T: EventListener> Handler for Term<T> {
+impl<T: EventListener, W: io::Write> Handler<W> for Term<T> {
     /// A character to be displayed.
     #[inline]
     fn input(&mut self, c: char) {
@@ -1523,7 +1523,7 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn identify_terminal<W: io::Write>(&mut self, writer: &mut W, intermediate: Option<char>) {
+    fn identify_terminal(&mut self, writer: &mut W, intermediate: Option<char>) {
         match intermediate {
             None => {
                 trace!("Reporting primary device attributes");
@@ -1539,7 +1539,7 @@ impl<T: EventListener> Handler for Term<T> {
     }
 
     #[inline]
-    fn device_status<W: io::Write>(&mut self, writer: &mut W, arg: usize) {
+    fn device_status(&mut self, writer: &mut W, arg: usize) {
         trace!("Reporting device status: {}", arg);
         match arg {
             5 => {
@@ -1847,7 +1847,7 @@ impl<T: EventListener> Handler for Term<T> {
 
     /// Write a foreground/background color escape sequence with the current color.
     #[inline]
-    fn dynamic_color_sequence<W: io::Write>(
+    fn dynamic_color_sequence(
         &mut self,
         writer: &mut W,
         code: u8,

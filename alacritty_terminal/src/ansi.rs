@@ -91,13 +91,13 @@ struct ProcessorState {
 ///
 /// Processor creates a Performer when running advance and passes the Performer
 /// to `vte::Parser`.
-struct Performer<'a, H: Handler, W: io::Write> {
+struct Performer<'a, H: Handler<W>, W> {
     state: &'a mut ProcessorState,
     handler: &'a mut H,
     writer: &'a mut W,
 }
 
-impl<'a, H: Handler + 'a, W: io::Write> Performer<'a, H, W> {
+impl<'a, H: Handler<W> + 'a, W> Performer<'a, H, W> {
     /// Create a performer.
     #[inline]
     pub fn new<'b>(
@@ -123,8 +123,7 @@ impl Processor {
     #[inline]
     pub fn advance<H, W>(&mut self, handler: &mut H, byte: u8, writer: &mut W)
     where
-        H: Handler,
-        W: io::Write,
+        H: Handler<W>,
     {
         let mut performer = Performer::new(&mut self.state, handler, writer);
         self.parser.advance(&mut performer, byte);
@@ -133,8 +132,8 @@ impl Processor {
 
 impl<'a, H, W> vte::Perform for Performer<'a, H, W>
 where
-    H: Handler + 'a,
-    W: io::Write + 'a,
+    H: Handler<W> + 'a,
+    W: 'a,
 {
     #[inline]
     fn print(&mut self, c: char) {
@@ -786,7 +785,7 @@ mod tests {
         identity_reported: bool,
     }
 
-    impl Handler for MockHandler {
+    impl Handler<io::Sink> for MockHandler {
         fn terminal_attribute(&mut self, attr: Attr) {
             self.attr = Some(attr);
         }
@@ -800,7 +799,7 @@ mod tests {
             self.index = index;
         }
 
-        fn identify_terminal<W: io::Write>(&mut self, _: &mut W, _intermediate: Option<char>) {
+        fn identify_terminal(&mut self, _: &mut io::Sink, _intermediate: Option<char>) {
             self.identity_reported = true;
         }
 
