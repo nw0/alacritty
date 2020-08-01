@@ -1,6 +1,5 @@
 //! ANSI Terminal Stream Parsing.
 
-use std::io;
 use std::str;
 
 use log::debug;

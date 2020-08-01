@@ -47,7 +47,7 @@ impl RegexSearch {
     }
 }
 
-impl<T> Term<T> {
+impl<T, W: std::io::Write> Term<T, W> {
     /// Enter terminal buffer search mode.
     #[inline]
     pub fn start_search(&mut self, search: &str) {
@@ -431,20 +431,23 @@ impl<T> Term<T> {
 }
 
 /// Iterator over regex matches.
-pub struct RegexIter<'a, T> {
+pub struct RegexIter<'a, T, W>
+where
+    W: std::io::Write,
+{
     point: Point<usize>,
     end: Point<usize>,
     direction: Direction,
-    term: &'a Term<T>,
+    term: &'a Term<T, W>,
     done: bool,
 }
 
-impl<'a, T> RegexIter<'a, T> {
+impl<'a, T, W: std::io::Write> RegexIter<'a, T, W> {
     pub fn new(
         start: Point<usize>,
         end: Point<usize>,
         direction: Direction,
-        term: &'a Term<T>,
+        term: &'a Term<T, W>,
     ) -> Self {
         Self { point: start, done: false, end, direction, term }
     }
@@ -468,7 +471,7 @@ impl<'a, T> RegexIter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for RegexIter<'a, T> {
+impl<'a, T, W: std::io::Write> Iterator for RegexIter<'a, T, W> {
     type Item = Match;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -236,7 +236,7 @@ impl Selection {
     }
 
     /// Convert selection to grid coordinates.
-    pub fn to_range<T>(&self, term: &Term<T>) -> Option<SelectionRange> {
+    pub fn to_range<T, W: std::io::Write>(&self, term: &Term<T, W>) -> Option<SelectionRange> {
         let grid = term.grid();
         let num_cols = grid.cols();
 
@@ -290,8 +290,8 @@ impl Selection {
         Ok((start, end))
     }
 
-    fn range_semantic<T>(
-        term: &Term<T>,
+    fn range_semantic<T, W: std::io::Write>(
+        term: &Term<T, W>,
         mut start: Point<usize>,
         mut end: Point<usize>,
     ) -> Option<SelectionRange> {
@@ -315,8 +315,8 @@ impl Selection {
         Some(SelectionRange { start, end, is_block: false })
     }
 
-    fn range_lines<T>(
-        term: &Term<T>,
+    fn range_lines<T, W: std::io::Write>(
+        term: &Term<T, W>,
         mut start: Point<usize>,
         mut end: Point<usize>,
     ) -> Option<SelectionRange> {
@@ -408,7 +408,7 @@ mod tests {
         fn send_event(&self, _event: Event) {}
     }
 
-    fn term(height: usize, width: usize) -> Term<Mock> {
+    fn term(height: usize, width: usize) -> Term<Mock, std::io::Sink> {
         let size = SizeInfo {
             width: width as f32,
             height: height as f32,

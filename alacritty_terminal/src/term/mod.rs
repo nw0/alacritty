@@ -69,7 +69,7 @@ pub struct RenderableSearch<'a> {
 
 impl<'a> RenderableSearch<'a> {
     /// Create a new renderable search iterator.
-    fn new<T>(term: &'a Term<T>) -> Self {
+    fn new<T, W: io::Write>(term: &'a Term<T, W>) -> Self {
         let viewport_end = term.grid().display_offset();
         let viewport_start = viewport_end + term.grid().screen_lines().0 - 1;
 
@@ -142,8 +142,8 @@ impl<'a, C> RenderableCellsIter<'a, C> {
     ///
     /// The cursor and terminal mode are required for properly displaying the
     /// cursor.
-    fn new<T>(
-        term: &'a Term<T>,
+    fn new<T, W: io::Write>(
+        term: &'a Term<T, W>,
         config: &'a Config<C>,
         selection: Option<SelectionRange>,
     ) -> RenderableCellsIter<'a, C> {
@@ -672,7 +672,7 @@ impl SizeInfo {
     }
 }
 
-pub struct Term<T> {
+pub struct Term<T, W> {
     /// Terminal requires redraw.
     pub dirty: bool,
 
@@ -745,9 +745,11 @@ pub struct Term<T> {
 
     /// Current forward and backward buffer search regexes.
     regex_search: Option<RegexSearch>,
+
+    _phantom: std::marker::PhantomData<W>,
 }
 
-impl<T> Term<T> {
+impl<T, W: io::Write> Term<T, W> {
     #[inline]
     pub fn scroll_display(&mut self, scroll: Scroll)
     where
@@ -758,7 +760,7 @@ impl<T> Term<T> {
         self.dirty = true;
     }
 
-    pub fn new<C>(config: &Config<C>, size: &SizeInfo, event_proxy: T) -> Term<T> {
+    pub fn new<C>(config: &Config<C>, size: &SizeInfo, event_proxy: T) -> Term<T, W> {
         let num_cols = size.cols();
         let num_lines = size.lines();
 
@@ -795,6 +797,7 @@ impl<T> Term<T> {
             title_stack: Vec::new(),
             selection: None,
             regex_search: None,
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -1335,7 +1338,7 @@ impl<T> Term<T> {
     }
 }
 
-impl<T> Dimensions for Term<T> {
+impl<T, W> Dimensions for Term<T, W> {
     #[inline]
     fn cols(&self) -> Column {
         self.grid.cols()
@@ -1352,7 +1355,7 @@ impl<T> Dimensions for Term<T> {
     }
 }
 
-impl<T: EventListener, W: io::Write> Handler<W> for Term<T> {
+impl<T: EventListener, W: io::Write> Handler<W> for Term<T, W> {
     /// A character to be displayed.
     #[inline]
     fn input(&mut self, c: char) {
@@ -1847,13 +1850,7 @@ impl<T: EventListener, W: io::Write> Handler<W> for Term<T> {
 
     /// Write a foreground/background color escape sequence with the current color.
     #[inline]
-    fn dynamic_color_sequence(
-        &mut self,
-        writer: &mut W,
-        code: u8,
-        index: usize,
-        terminator: &str,
-    ) {
+    fn dynamic_color_sequence(&mut self, writer: &mut W, code: u8, index: usize, terminator: &str) {
         trace!("Writing escape sequence for dynamic color code {}: color[{}]", code, index);
         let color = self.colors[index];
         let response = format!(
@@ -2333,7 +2330,7 @@ pub mod test {
     ///     hello\n:)\r\ntest",
     /// );
     /// ```
-    pub fn mock_term(content: &str) -> Term<()> {
+    pub fn mock_term(content: &str) -> Term<(), io::Sink> {
         let lines: Vec<&str> = content.split('\n').collect();
         let num_cols = lines
             .iter()
@@ -2408,7 +2405,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
         let mut grid: Grid<Cell> = Grid::new(Line(3), Column(5), 0, Cell::default());
         for i in 0..5 {
             for j in 0..2 {
@@ -2464,7 +2461,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
         let mut grid: Grid<Cell> = Grid::new(Line(1), Column(5), 0, Cell::default());
         for i in 0..5 {
             grid[Line(0)][Column(i)].c = 'a';
@@ -2493,7 +2490,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
         let mut grid: Grid<Cell> = Grid::new(Line(3), Column(3), 0, Cell::default());
         for l in 0..3 {
             if l != 1 {
@@ -2538,7 +2535,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
         let cursor = Point::new(Line(0), Column(0));
         term.configure_charset(CharsetIndex::G0, StandardCharset::SpecialCharacterAndLineDrawing);
         term.input('a');
@@ -2557,7 +2554,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Add one line of scrollback.
         term.grid.scroll_up(&(Line(0)..Line(1)), Line(1), Cell::default());
@@ -2587,7 +2584,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Create 10 lines of scrollback.
         for _ in 0..19 {
@@ -2615,7 +2612,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Create 10 lines of scrollback.
         for _ in 0..19 {
@@ -2649,7 +2646,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Create 10 lines of scrollback.
         for _ in 0..19 {
@@ -2677,7 +2674,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Create 10 lines of scrollback.
         for _ in 0..19 {
@@ -2711,7 +2708,7 @@ mod tests {
             padding_y: 0.0,
             dpr: 1.0,
         };
-        let mut term = Term::new(&MockConfig::default(), &size, Mock);
+        let mut term: Term<Mock, io::Sink> = Term::new(&MockConfig::default(), &size, Mock);
 
         // Title None by default.
         assert_eq!(term.title, None);
@@ -2814,7 +2811,7 @@ mod benches {
 
         let config = MockConfig::default();
 
-        let mut terminal = Term::new(&config, &size, Mock);
+        let mut terminal: Term<Mock, io::Sink> = Term::new(&config, &size, Mock);
         mem::swap(&mut terminal.grid, &mut grid);
 
         b.iter(|| {

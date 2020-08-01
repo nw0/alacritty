@@ -41,12 +41,12 @@ pub enum Msg {
 ///
 /// Handles all the PTY I/O and runs the PTY parser which updates terminal
 /// state.
-pub struct EventLoop<T: tty::EventedPty, U: EventListener> {
+pub struct EventLoop<T: tty::EventedPty, U: EventListener, W> {
     poll: mio::Poll,
     pty: T,
     rx: Receiver<Msg>,
     tx: Sender<Msg>,
-    terminal: Arc<FairMutex<Term<U>>>,
+    terminal: Arc<FairMutex<Term<U, W>>>,
     event_proxy: U,
     hold: bool,
     ref_test: bool,
@@ -148,19 +148,20 @@ impl Writing {
     }
 }
 
-impl<T, U> EventLoop<T, U>
+impl<T, U, W> EventLoop<T, U, W>
 where
-    T: tty::EventedPty + event::OnResize + Send + 'static,
+    T: tty::EventedPty + tty::EventedReadWrite<Writer = W> + event::OnResize + Send + 'static,
     U: EventListener + Send + 'static,
+    W: io::Write + Send + 'static,
 {
     /// Create a new event loop.
     pub fn new(
-        terminal: Arc<FairMutex<Term<U>>>,
+        terminal: Arc<FairMutex<Term<U, W>>>,
         event_proxy: U,
         pty: T,
         hold: bool,
         ref_test: bool,
-    ) -> EventLoop<T, U> {
+    ) -> EventLoop<T, U, W> {
         let (tx, rx) = channel::channel();
         EventLoop {
             poll: mio::Poll::new().expect("create mio Poll"),
@@ -244,7 +245,7 @@ where
 
                     // Run the parser.
                     for byte in &buf[..got] {
-                        state.parser.advance(&mut **terminal, *byte, &mut self.pty.writer());
+                        state.parser.advance(&mut **terminal, *byte, self.pty.writer());
                     }
 
                     // Exit if we've processed enough bytes.

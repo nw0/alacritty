@@ -122,9 +122,12 @@ impl Default for SearchState {
     }
 }
 
-pub struct ActionContext<'a, N, T> {
+pub struct ActionContext<'a, N, T, W>
+where
+    W: std::io::Write,
+{
     pub notifier: &'a mut N,
-    pub terminal: &'a mut Term<T>,
+    pub terminal: &'a mut Term<T, W>,
     pub clipboard: &'a mut Clipboard,
     pub size_info: &'a mut SizeInfo,
     pub mouse: &'a mut Mouse,
@@ -142,7 +145,9 @@ pub struct ActionContext<'a, N, T> {
     font_size: &'a mut Size,
 }
 
-impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionContext<'a, N, T> {
+impl<'a, N: Notify + 'a, T: EventListener, W: std::io::Write> input::ActionContext<T, W>
+    for ActionContext<'a, N, T, W>
+{
     fn write_to_pty<B: Into<Cow<'static, [u8]>>>(&mut self, val: B) {
         self.notifier.notify(val);
     }
@@ -283,12 +288,12 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
     }
 
     #[inline]
-    fn terminal(&self) -> &Term<T> {
+    fn terminal(&self) -> &Term<T, W> {
         self.terminal
     }
 
     #[inline]
-    fn terminal_mut(&mut self) -> &mut Term<T> {
+    fn terminal_mut(&mut self) -> &mut Term<T, W> {
         self.terminal
     }
 
@@ -501,7 +506,7 @@ impl<'a, N: Notify + 'a, T: EventListener> input::ActionContext<T> for ActionCon
     }
 }
 
-impl<'a, N: Notify + 'a, T: EventListener> ActionContext<'a, N, T> {
+impl<'a, N: Notify + 'a, T: EventListener, W: std::io::Write> ActionContext<'a, N, T, W> {
     fn update_search(&mut self) {
         let regex = match self.search_state.regex.as_mut() {
             Some(regex) => regex,
@@ -743,8 +748,11 @@ impl<N: Notify + OnResize> Processor<N> {
     }
 
     /// Run the event loop.
-    pub fn run<T>(&mut self, terminal: Arc<FairMutex<Term<T>>>, mut event_loop: EventLoop<Event>)
-    where
+    pub fn run<T, W: std::io::Write>(
+        &mut self,
+        terminal: Arc<FairMutex<Term<T, W>>>,
+        mut event_loop: EventLoop<Event>,
+    ) where
         T: EventListener,
     {
         let mut scheduler = Scheduler::new();
@@ -866,9 +874,9 @@ impl<N: Notify + OnResize> Processor<N> {
     /// Handle events from glutin.
     ///
     /// Doesn't take self mutably due to borrow checking.
-    fn handle_event<T>(
+    fn handle_event<T, W: std::io::Write>(
         event: GlutinEvent<Event>,
-        processor: &mut input::Processor<T, ActionContext<N, T>>,
+        processor: &mut input::Processor<T, ActionContext<N, T, W>, W>,
     ) where
         T: EventListener,
     {
@@ -1033,8 +1041,10 @@ impl<N: Notify + OnResize> Processor<N> {
         }
     }
 
-    fn reload_config<T>(path: &PathBuf, processor: &mut input::Processor<T, ActionContext<N, T>>)
-    where
+    fn reload_config<T, W: std::io::Write>(
+        path: &PathBuf,
+        processor: &mut input::Processor<T, ActionContext<N, T, W>, W>,
+    ) where
         T: EventListener,
     {
         if !processor.ctx.message_buffer.is_empty() {
@@ -1099,9 +1109,9 @@ impl<N: Notify + OnResize> Processor<N> {
     }
 
     /// Submit the pending changes to the `Display`.
-    fn submit_display_update<T>(
+    fn submit_display_update<T, W: std::io::Write>(
         &mut self,
-        terminal: &mut Term<T>,
+        terminal: &mut Term<T, W>,
         old_is_searching: bool,
         display_update_pending: DisplayUpdate,
     ) where
@@ -1137,7 +1147,7 @@ impl<N: Notify + OnResize> Processor<N> {
     }
 
     /// Write the ref test results to the disk.
-    fn write_ref_test_results<T>(&self, terminal: &Term<T>) {
+    fn write_ref_test_results<T, W: std::io::Write>(&self, terminal: &Term<T, W>) {
         // Dump grid state.
         let mut grid = terminal.grid().clone();
         grid.initialize_all(Cell::default());

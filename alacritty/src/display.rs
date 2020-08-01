@@ -369,9 +369,9 @@ impl Display {
     }
 
     /// Process update events.
-    pub fn handle_update<T>(
+    pub fn handle_update<T, W: std::io::Write>(
         &mut self,
-        terminal: &mut Term<T>,
+        terminal: &mut Term<T, W>,
         pty_resize_handle: &mut dyn OnResize,
         message_buffer: &MessageBuffer,
         search_active: bool,
@@ -441,9 +441,9 @@ impl Display {
     /// A reference to Term whose state is being drawn must be provided.
     ///
     /// This call may block if vsync is enabled.
-    pub fn draw<T>(
+    pub fn draw<T, W: std::io::Write>(
         &mut self,
-        terminal: MutexGuard<'_, Term<T>>,
+        terminal: MutexGuard<'_, Term<T, W>>,
         message_buffer: &MessageBuffer,
         config: &Config,
         mouse: &Mouse,

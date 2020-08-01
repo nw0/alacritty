@@ -56,13 +56,17 @@ const SELECTION_SCROLLING_STEP: f64 = 20.;
 ///
 /// An escape sequence may be emitted in case specific keys or key combinations
 /// are activated.
-pub struct Processor<'a, T: EventListener, A: ActionContext<T>> {
+pub struct Processor<'a, T: EventListener, A: ActionContext<T, W>, W>
+where
+    W: std::io::Write,
+{
     pub ctx: A,
     pub highlighted_url: &'a Option<Url>,
     _phantom: PhantomData<T>,
+    _phantom2: PhantomData<W>,
 }
 
-pub trait ActionContext<T: EventListener> {
+pub trait ActionContext<T: EventListener, W> {
     fn write_to_pty<B: Into<Cow<'static, [u8]>>>(&mut self, data: B);
     fn size_info(&self) -> SizeInfo;
     fn copy_selection(&mut self, ty: ClipboardType);
@@ -80,8 +84,8 @@ pub trait ActionContext<T: EventListener> {
     fn scroll(&mut self, scroll: Scroll);
     fn window(&self) -> &Window;
     fn window_mut(&mut self) -> &mut Window;
-    fn terminal(&self) -> &Term<T>;
-    fn terminal_mut(&mut self) -> &mut Term<T>;
+    fn terminal(&self) -> &Term<T, W>;
+    fn terminal_mut(&mut self) -> &mut Term<T, W>;
     fn spawn_new_instance(&mut self);
     fn change_font_size(&mut self, delta: f32);
     fn reset_font_size(&mut self);
@@ -105,23 +109,24 @@ pub trait ActionContext<T: EventListener> {
     fn search_active(&self) -> bool;
 }
 
-trait Execute<T: EventListener> {
-    fn execute<A: ActionContext<T>>(&self, ctx: &mut A);
+trait Execute<T: EventListener, W: std::io::Write> {
+    fn execute<A: ActionContext<T, W>>(&self, ctx: &mut A);
 }
 
-impl<T, U: EventListener> Execute<U> for Binding<T> {
+impl<T, U: EventListener, W: std::io::Write> Execute<U, W> for Binding<T> {
     /// Execute the action associate with this binding.
     #[inline]
-    fn execute<A: ActionContext<U>>(&self, ctx: &mut A) {
+    fn execute<A: ActionContext<U, W>>(&self, ctx: &mut A) {
         self.action.execute(ctx)
     }
 }
 
 impl Action {
-    fn toggle_selection<T, A>(ctx: &mut A, ty: SelectionType)
+    fn toggle_selection<T, A, W>(ctx: &mut A, ty: SelectionType)
     where
         T: EventListener,
-        A: ActionContext<T>,
+        A: ActionContext<T, W>,
+        W: std::io::Write,
     {
         let cursor_point = ctx.terminal().vi_mode_cursor.point;
         ctx.toggle_selection(ty, cursor_point, Side::Left);
@@ -133,9 +138,9 @@ impl Action {
     }
 }
 
-impl<T: EventListener> Execute<T> for Action {
+impl<T: EventListener, W: std::io::Write> Execute<T, W> for Action {
     #[inline]
-    fn execute<A: ActionContext<T>>(&self, ctx: &mut A) {
+    fn execute<A: ActionContext<T, W>>(&self, ctx: &mut A) {
         match *self {
             Action::Esc(ref s) => {
                 if ctx.config().ui_config.mouse.hide_when_typing {
@@ -318,7 +323,7 @@ impl<T: EventListener> Execute<T> for Action {
     }
 }
 
-fn paste<T: EventListener, A: ActionContext<T>>(ctx: &mut A, contents: &str) {
+fn paste<T: EventListener, A: ActionContext<T, W>, W: std::io::Write>(ctx: &mut A, contents: &str) {
     if ctx.terminal().mode().contains(TermMode::BRACKETED_PASTE) {
         ctx.write_to_pty(&b"\x1b[200~"[..]);
         ctx.write_to_pty(contents.replace("\x1b", "").into_bytes());
@@ -353,9 +358,9 @@ impl From<MouseState> for CursorIcon {
     }
 }
 
-impl<'a, T: EventListener, A: ActionContext<T>> Processor<'a, T, A> {
+impl<'a, T: EventListener, A: ActionContext<T, W>, W: std::io::Write> Processor<'a, T, A, W> {
     pub fn new(ctx: A, highlighted_url: &'a Option<Url>) -> Self {
-        Self { ctx, highlighted_url, _phantom: Default::default() }
+        Self { ctx, highlighted_url, _phantom: Default::default(), _phantom2: Default::default() }
     }
 
     #[inline]
@@ -1115,8 +1120,11 @@ mod tests {
         fn send_event(&self, _event: TerminalEvent) {}
     }
 
-    struct ActionContext<'a, T> {
-        pub terminal: &'a mut Term<T>,
+    struct ActionContext<'a, T, W>
+    where
+        W: std::io::Write,
+    {
+        pub terminal: &'a mut Term<T, W>,
         pub selection: &'a mut Option<Selection>,
         pub size_info: &'a SizeInfo,
         pub mouse: &'a mut Mouse,
@@ -1128,7 +1136,9 @@ mod tests {
         config: &'a Config,
     }
 
-    impl<'a, T: EventListener> super::ActionContext<T> for ActionContext<'a, T> {
+    impl<'a, T: EventListener, W: std::io::Write> super::ActionContext<T, W>
+        for ActionContext<'a, T, W>
+    {
         fn write_to_pty<B: Into<Cow<'static, [u8]>>>(&mut self, _val: B) {}
 
         fn update_selection(&mut self, _point: Point, _side: Side) {}
@@ -1169,11 +1179,11 @@ mod tests {
             false
         }
 
-        fn terminal(&self) -> &Term<T> {
+        fn terminal(&self) -> &Term<T, W> {
             &self.terminal
         }
 
-        fn terminal_mut(&mut self) -> &mut Term<T> {
+        fn terminal_mut(&mut self) -> &mut Term<T, W> {
             &mut self.terminal
         }
 
@@ -1301,7 +1311,7 @@ mod tests {
 
                 let mut clipboard = Clipboard::new_nop();
 
-                let mut terminal = Term::new(&cfg, &size, MockEventProxy);
+                let mut terminal: Term<MockEventProxy, std::io::Sink> = Term::new(&cfg, &size, MockEventProxy);
 
                 let mut mouse = Mouse::default();
                 mouse.click_state = $initial_state;
