@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use unicode_width::UnicodeWidthChar;
 
 use crate::ansi::{
-    self, Attr, CharsetIndex, Color, CursorStyle, Handler, NamedColor, StandardCharset,
+    self, Attr, CharsetIndex, Color, CursorStyle, CursorStyleDef, Handler, NamedColor,
+    StandardCharset,
 };
 use crate::config::{BellAnimation, BellConfig, Config};
 use crate::event::{Event, EventListener};
@@ -56,6 +57,7 @@ struct RenderableCursor {
 /// A key for caching cursor glyphs.
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Deserialize)]
 pub struct CursorKey {
+    #[serde(with = "CursorStyleDef")]
     pub style: CursorStyle,
     pub is_wide: bool,
 }

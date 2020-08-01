@@ -2,7 +2,7 @@ use bitflags::bitflags;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ansi::{Color, NamedColor};
+use crate::ansi::{Color, ColorDef, NamedColor};
 use crate::grid::{self, GridCell};
 use crate::index::Column;
 
@@ -35,7 +35,9 @@ const fn default_extra() -> [char; MAX_ZEROWIDTH_CHARS] {
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Cell {
     pub c: char,
+    #[serde(with = "ColorDef")]
     pub fg: Color,
+    #[serde(with = "ColorDef")]
     pub bg: Color,
     pub flags: Flags,
     #[serde(default = "default_extra")]

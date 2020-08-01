@@ -10,7 +10,7 @@ mod bell;
 mod colors;
 mod scrolling;
 
-use crate::ansi::CursorStyle;
+use crate::ansi::{CursorStyle, CursorStyleDef};
 
 pub use crate::config::bell::{BellAnimation, BellConfig};
 pub use crate::config::colors::Colors;
@@ -124,9 +124,9 @@ impl Default for EscapeChars {
 #[serde(default)]
 #[derive(Deserialize, Copy, Clone, Debug, PartialEq)]
 pub struct Cursor {
-    #[serde(deserialize_with = "failure_default")]
+    #[serde(deserialize_with = "failure_default_cursorstyle")]
     pub style: CursorStyle,
-    #[serde(deserialize_with = "option_explicit_none")]
+    #[serde(deserialize_with = "option_explicit_none_cursorstyle")]
     pub vi_mode_style: Option<CursorStyle>,
     #[serde(deserialize_with = "deserialize_cursor_thickness")]
     thickness: Percentage,
@@ -273,5 +273,25 @@ where
     Ok(match Value::deserialize(deserializer)? {
         Value::String(ref value) if value.to_lowercase() == "none" => None,
         value => Some(T::deserialize(value).unwrap_or_else(fallback_default)),
+    })
+}
+
+pub fn failure_default_cursorstyle<'de, D>(deserializer: D) -> Result<CursorStyle, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(CursorStyleDef::deserialize(Value::deserialize(deserializer)?)
+        .unwrap_or_else(fallback_default))
+}
+
+pub fn option_explicit_none_cursorstyle<'de, D>(
+    deserializer: D,
+) -> Result<Option<CursorStyle>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match Value::deserialize(deserializer)? {
+        Value::String(ref value) if value.to_lowercase() == "none" => None,
+        value => Some(CursorStyleDef::deserialize(value).unwrap_or_else(fallback_default)),
     })
 }

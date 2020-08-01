@@ -54,7 +54,7 @@ where
 {
     let value = Value::deserialize(deserializer)?;
     match Rgb::deserialize(value) {
-        Ok(value) => Ok(value),
+        Ok(value) => Ok(value.into()),
         Err(err) => {
             error!(
                 target: LOG_TARGET_CONFIG,
