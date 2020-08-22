@@ -2190,9 +2190,16 @@ impl<T: EventListener, W: io::Write> Handler<W> for Term<T, W> {
     }
 
     #[inline]
-    fn set_title(&mut self, title: Option<&str>) {
+    fn set_title(&mut self, title: Option<&[&[u8]]>) {
         trace!("Setting title to '{:?}'", title);
-        let title = title.map(String::from);
+        let title = title.map(|t| {
+            t.iter()
+                .flat_map(|x| str::from_utf8(x))
+                .collect::<Vec<&str>>()
+                .join(";")
+                .trim()
+                .to_owned()
+        });
 
         self.title = title.clone();
 
@@ -2225,7 +2232,12 @@ impl<T: EventListener, W: io::Write> Handler<W> for Term<T, W> {
 
         if let Some(popped) = self.title_stack.pop() {
             trace!("Title '{:?}' popped from stack", popped);
-            self.set_title(popped.as_deref());
+            match popped {
+                None => self.set_title(None),
+                Some(title) => {
+                    self.set_title(Some(&[title.as_bytes()]));
+                },
+            }
         }
     }
 }
@@ -2717,12 +2729,12 @@ mod tests {
         assert_eq!(term.title, None);
 
         // Title can be set.
-        term.set_title(Some("Test".into()));
+        term.set_title(Some(&["Test".as_bytes()]));
         assert_eq!(term.title, Some("Test".into()));
 
         // Title can be pushed onto stack.
         term.push_title();
-        term.set_title(Some("Next".into()));
+        term.set_title(Some(&["Next".as_bytes()]));
         assert_eq!(term.title, Some("Next".into()));
         assert_eq!(term.title_stack.get(0).unwrap(), &Some("Test".into()));
 
@@ -2746,7 +2758,7 @@ mod tests {
         // Title stack pops back to default.
         term.title = None;
         term.push_title();
-        term.set_title(Some("Test".into()));
+        term.set_title(Some(&["Test".as_bytes()]));
         term.pop_title();
         assert_eq!(term.title, None);
 
